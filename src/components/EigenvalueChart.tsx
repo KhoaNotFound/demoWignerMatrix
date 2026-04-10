@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
@@ -14,19 +14,30 @@ export default function EigenvalueChart({ eigenvalues, lambdaMax, hasCommunity }
   const histogramData = useMemo(() => {
     if (!eigenvalues || eigenvalues.length === 0) return [];
 
-    const bins = 60;
-    const min = Math.min(...eigenvalues);
-    const max = Math.max(...eigenvalues);
+    const bins = 120;
+    const min = Math.min(...eigenvalues, -2.5);
+    const max = Math.max(...eigenvalues, 2.5);
     const step = (max - min) / bins;
 
     if (step === 0) return [];
+    
+    const N = eigenvalues.length;
 
-    const histogram = new Array(bins).fill(0).map((_, i) => ({
-      name: (min + (i + 0.5) * step).toFixed(2),
-      count: 0,
-      binStart: min + i * step,
-      binEnd: min + (i + 1) * step,
-    }));
+    const histogram = new Array(bins).fill(0).map((_, i) => {
+      const mid = min + (i + 0.5) * step;
+      // Wigner semicircle theoretical curve
+      let theory = 0;
+      if (Math.abs(mid) <= 2) {
+        theory = N * step * (1 / (2 * Math.PI)) * Math.sqrt(4 - mid * mid);
+      }
+      return {
+        name: mid.toFixed(2),
+        count: 0,
+        theory: theory,
+        binStart: min + i * step,
+        binEnd: min + (i + 1) * step,
+      };
+    });
 
     eigenvalues.forEach(val => {
       const binIndex = Math.min(Math.floor((val - min) / step), bins - 1);
@@ -37,9 +48,6 @@ export default function EigenvalueChart({ eigenvalues, lambdaMax, hasCommunity }
 
     return histogram;
   }, [eigenvalues]);
-
-  // Wigner semicircle theoretical curve (normalized)
-  const maxCount = Math.max(...histogramData.map(d => d.count), 1);
 
   return (
     <div className="chart-card">
@@ -54,29 +62,47 @@ export default function EigenvalueChart({ eigenvalues, lambdaMax, hasCommunity }
       </p>
       <div className="chart-container">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={histogramData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+          <ComposedChart data={histogramData} margin={{ top: 20, right: 30, left: 30, bottom: 30 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
             <XAxis
               dataKey="name"
-              tick={{ fontSize: 10, fill: '#64748b' }}
+              tick={{ fontSize: 11, fill: '#64748b' }}
               tickMargin={8}
               axisLine={{ stroke: '#cbd5e1' }}
-              interval={Math.floor(histogramData.length / 8)}
+              interval="preserveStartEnd"
+              minTickGap={30}
+              label={{ value: 'Eigenvalue (λ)', position: 'insideBottom', offset: -15, fill: '#475569', fontSize: 12, fontWeight: 600 }}
             />
             <YAxis
-              tick={{ fontSize: 10, fill: '#64748b' }}
+              tick={{ fontSize: 11, fill: '#64748b' }}
               axisLine={{ stroke: '#cbd5e1' }}
+              label={{ value: 'Frequency (Count)', angle: -90, position: 'insideLeft', offset: -10, fill: '#475569', fontSize: 12, fontWeight: 600 }}
             />
             <Tooltip
               cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
+              position={{ x: 350, y: 10 }}
               contentStyle={{
                 borderRadius: '8px',
                 border: '1px solid #e2e8f0',
                 background: '#ffffff',
                 color: '#0f172a',
                 boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                zIndex: 100,
               }}
               labelStyle={{ color: '#475569', marginBottom: '4px' }}
+            />
+            <ReferenceLine
+              x="-2.00"
+              stroke="#ef4444"
+              strokeDasharray="6 4"
+              strokeWidth={2}
+              label={{
+                position: 'top',
+                value: 'Lower Bound (-2.0)',
+                fill: '#ef4444',
+                fontSize: 11,
+                fontWeight: 600,
+              }}
             />
             <ReferenceLine
               x="2.00"
@@ -107,7 +133,8 @@ export default function EigenvalueChart({ eigenvalues, lambdaMax, hasCommunity }
               />
             )}
             <Bar dataKey="count" fill="#4f46e5" radius={[3, 3, 0, 0]} />
-          </BarChart>
+            <Line dataKey="theory" type="monotone" dot={false} stroke="#f59e0b" strokeWidth={2} name="Semicircle Law" />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
       <p className="chart-footer">
