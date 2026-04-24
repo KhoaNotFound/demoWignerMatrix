@@ -1,59 +1,56 @@
 import React, { useCallback, useState } from 'react';
 import { Upload, FileText, Loader2, X } from 'lucide-react';
 
-interface FileUploadProps {
+interface Props {
   onAnalyze: (files: File[], kClusters: number) => void;
   loading: boolean;
   error: string | null;
 }
 
-export default function FileUpload({ onAnalyze, loading, error }: FileUploadProps) {
-  const [files, setFiles] = useState<File[]>([]);
+const ACCEPTED = '.csv,.mtx,.txt,.edges,.nodes,.graph';
+
+function formatSize(bytes: number) {
+  if (bytes < 1024)    return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+function fileIcon(name: string) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (ext === 'mtx')               return '🔢';
+  if (ext === 'edges' || ext === 'nodes') return '🕸️';
+  if (ext === 'graph')             return '📐';
+  if (ext === 'csv')               return '📊';
+  return '📄';
+}
+
+export default function FileUpload({ onAnalyze, loading, error }: Props) {
+  const [files,     setFiles]     = useState<File[]>([]);
   const [kClusters, setKClusters] = useState<number>(0);
-  const [dragActive, setDragActive] = useState(false);
+  const [drag,      setDrag]      = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
+    e.preventDefault(); e.stopPropagation();
+    setDrag(e.type === 'dragenter' || e.type === 'dragover');
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    e.preventDefault(); e.stopPropagation();
+    setDrag(false);
+    if (e.dataTransfer.files.length > 0)
       setFiles(Array.from(e.dataTransfer.files));
-    }
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setFiles(Array.from(e.target.files));
-    }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) setFiles(Array.from(e.target.files));
   };
 
-  const removeFile = (indexToRemove: number) => {
-    setFiles(files.filter((_, index) => index !== indexToRemove));
+  const addFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length)
+      setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
-  };
-
-  const getFileIcon = (name: string) => {
-    const ext = name.split('.').pop()?.toLowerCase();
-    if (ext === 'mtx') return '🔢';
-    if (ext === 'edges' || ext === 'nodes') return '🕸️';
-    if (ext === 'csv') return '📊';
-    return '📄';
-  };
+  const remove = (i: number) => setFiles(f => f.filter((_, idx) => idx !== i));
 
   return (
     <div className="upload-card">
@@ -62,15 +59,15 @@ export default function FileUpload({ onAnalyze, loading, error }: FileUploadProp
         Upload Network Data
       </h2>
       <p className="upload-subtitle">
-        Supports single files (<code>.csv</code>, <code>.mtx</code>) or multiple (<code>.edges</code> & <code>.nodes</code>)
+        Single file&nbsp;<code>.csv</code>&nbsp;<code>.mtx</code>&nbsp;<code>.graph</code>
+        &nbsp;— or multi-file&nbsp;<code>.edges</code>&nbsp;+&nbsp;<code>.nodes</code>
       </p>
 
+      {/* Drop zone */}
       <div
-        className={`drop-zone ${dragActive ? 'drop-zone--active' : ''} ${files.length > 0 ? 'drop-zone--has-file' : ''}`}
-        onDragEnter={handleDrag}
-        onDragLeave={handleDrag}
-        onDragOver={handleDrag}
-        onDrop={handleDrop}
+        className={`drop-zone ${drag ? 'drop-zone--active' : ''} ${files.length ? 'drop-zone--has-file' : ''}`}
+        onDragEnter={handleDrag} onDragLeave={handleDrag}
+        onDragOver={handleDrag}  onDrop={handleDrop}
       >
         {files.length === 0 ? (
           <label className="drop-zone-label">
@@ -78,57 +75,43 @@ export default function FileUpload({ onAnalyze, loading, error }: FileUploadProp
               <Upload className="drop-zone-icon" />
             </div>
             <p className="drop-zone-text">
-              <span className="drop-zone-text-bold">Click to choose files</span> or drag & drop here
+              <span className="drop-zone-text-bold">Click to choose</span> or drag &amp; drop
             </p>
-            <p className="drop-zone-hint">CSV • MTX • EDGES • NODES</p>
-            <input
-              type="file"
-              className="drop-zone-input"
-              accept=".csv,.mtx,.txt,.edges,.nodes"
-              multiple
-              onChange={handleFileChange}
-            />
+            <p className="drop-zone-hint">CSV · MTX · EDGES · NODES · GRAPH</p>
+            <input type="file" className="drop-zone-input" accept={ACCEPTED} multiple onChange={handleChange} />
           </label>
         ) : (
-          <div className="file-preview" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {files.map((file, index) => (
-              <div className="file-preview-info" key={index}>
-                <span className="file-preview-icon">{getFileIcon(file.name)}</span>
+          <div className="file-preview" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {files.map((f, i) => (
+              <div className="file-preview-info" key={i}>
+                <span className="file-preview-icon">{fileIcon(f.name)}</span>
                 <div className="file-preview-details">
-                  <span className="file-preview-name">{file.name}</span>
-                  <span className="file-preview-size">{formatSize(file.size)}</span>
+                  <span className="file-preview-name">{f.name}</span>
+                  <span className="file-preview-size">{formatSize(f.size)}</span>
                 </div>
-                <button className="file-preview-remove" onClick={() => removeFile(index)} title="Remove file">
-                  <X size={16} />
+                <button className="file-preview-remove" onClick={() => remove(i)} title="Remove">
+                  <X size={15} />
                 </button>
               </div>
             ))}
-            <label className="analyze-button" style={{ marginTop: '0.5rem', background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
+            <label className="analyze-button" style={{ marginTop: '0.4rem', background: 'var(--bg-muted)', color: 'var(--text)', border: '1px solid var(--border)', boxShadow: 'none' }}>
               Add more files
-              <input type="file" className="drop-zone-input" accept=".csv,.mtx,.txt,.edges,.nodes" multiple onChange={(e) => {
-                if (e.target.files) setFiles([...files, ...Array.from(e.target.files)]);
-              }} />
+              <input type="file" className="drop-zone-input" accept={ACCEPTED} multiple onChange={addFiles} />
             </label>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
-        <label htmlFor="kClusters" style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-          Communities (K):
-        </label>
+      {/* K selector */}
+      <div className="k-selector-row">
+        <label htmlFor="kClusters" className="k-selector-label">Communities (K):</label>
         <select
           id="kClusters"
+          className="k-selector"
           value={kClusters}
-          onChange={(e) => setKClusters(parseInt(e.target.value))}
-          style={{
-            padding: '0.5rem',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '1rem',
-          }}
+          onChange={e => setKClusters(parseInt(e.target.value))}
         >
-          <option value={0}>Auto-detect (Wigner BBP Theory)</option>
+          <option value={0}>Auto-detect (BBP Theory)</option>
           <option value={2}>2 Communities</option>
           <option value={3}>3 Communities</option>
           <option value={4}>4 Communities</option>
@@ -137,21 +120,16 @@ export default function FileUpload({ onAnalyze, loading, error }: FileUploadProp
         </select>
       </div>
 
+      {/* Analyze button */}
       <button
         className="analyze-button"
-        onClick={() => files.length > 0 && onAnalyze(files, kClusters)}
+        onClick={() => files.length && onAnalyze(files, kClusters)}
         disabled={files.length === 0 || loading}
       >
         {loading ? (
-          <>
-            <Loader2 className="analyze-button-spinner" />
-            Analyzing...
-          </>
+          <><Loader2 className="analyze-button-spinner" /> Analyzing…</>
         ) : (
-          <>
-            <FileText size={18} />
-            Analyze Network
-          </>
+          <><FileText size={17} /> Analyze Network</>
         )}
       </button>
 
