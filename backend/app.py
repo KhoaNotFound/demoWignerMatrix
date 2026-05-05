@@ -26,6 +26,11 @@ from wigner import (
     build_adjacency_matrix,
     detect_communities,
 )
+from benchmark import (
+    run_all_algorithms,
+    generate_lfr_benchmark,
+    stability_test,
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -168,6 +173,161 @@ def detect():
             for fpath in saved.values():
                 if os.path.exists(fpath):
                     os.remove(fpath)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+@app.route('/api/benchmark', methods=['POST'])
+def benchmark():
+    """
+    Compare Wigner vs classic algorithms on the same dataset.
+    Accepts:
+      - file upload (same as /api/detect)
+      - OR JSON body: { "mode": "lfr", "n": 200, "mu": 0.1, "k": 4 }
+    """
+    try:
+        # ── LFR Benchmark mode ──────────────────────────────────
+        if request.is_json:
+            body = request.get_json()
+            mode = body.get('mode', 'lfr')
+            if mode == 'lfr':
+                n   = min(int(body.get('n', 200)), 1000)
+                mu  = float(body.get('mu', 0.1))
+                k   = int(body.get('k', 4))
+                avg_deg = int(body.get('avg_degree', 10))
+
+                lfr = generate_lfr_benchmark(n=n, mu=mu, k_communities=k, average_degree=avg_deg)
+                edges            = lfr['edges']
+                gt_labels        = lfr['ground_truth_labels']
+                gt_nodes         = lfr['ground_truth_nodes']
+                num_true_k       = lfr['num_true_communities']
+
+                comparison = run_all_algorithms(
+                    edges,
+                    k=num_true_k,
+                    ground_truth_labels=gt_labels,
+                    ground_truth_nodes=gt_nodes,
+                )
+                comparison['lfr_params'] = lfr['graph_stats']
+                comparison['num_true_communities'] = num_true_k
+                comparison['has_ground_truth'] = True
+                return jsonify(comparison)
+
+        # ── File upload mode ────────────────────────────────────
+        files = request.files.getlist('file')
+        if not files or all(f.filename == '' for f in files):
+            return jsonify({'error': 'No files uploaded.'}), 400
+
+        saved: Dict[str, str] = {}
+        for f in files:
+            if f.filename and allowed_file(f.filename):
+                fname = secure_filename(f.filename)
+                fpath = os.path.join(UPLOAD_FOLDER, fname)
+                f.save(fpath)
+                saved[ext(fname)] = fpath
+
+        if not saved:
+            return jsonify({'error': 'No valid files found.'}), 400
+
+        k_clusters = int(request.form.get('k', 0))
+
+        try:
+            if 'mtx' in saved:
+                try:
+                    parsed = parse_mtx_file(saved['mtx'])
+                    edges  = parsed['edges']
+                except Exception:
+                    edges = parse_csv_edges(saved['mtx'])
+            elif 'edges' in saved:
+                edges = parse_nodes_edges_files(saved['edges'], saved.get('nodes'))
+            elif 'graph' in saved:
+                edges = parse_graph_file(saved['graph'])
+            else:
+                key   = next(iter(saved))
+                edges = parse_csv_edges(saved[key])
+
+            if len(edges) == 0:
+                return jsonify({'error': 'No valid edges found.'}), 400
+
+            # Check size
+            from benchmark import edges_to_nx
+            import networkx as nx
+            G = edges_to_nx(edges)
+            if G.number_of_nodes() > MAX_NODES:
+                return jsonify({'error': f'Too many nodes ({G.number_of_nodes()}). Max: {MAX_NODES}.'}), 400
+
+            comparison = run_all_algorithms(edges, k=k_clusters)
+            comparison['has_ground_truth'] = False
+            return jsonify(comparison)
+
+        finally:
+            for fpath in saved.values():
+                if os.path.exists(fpath):
+                    os.remove(fpath)
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ─────────────────────────────────────────────────────────────
+@app.route('/api/stability', methods=['POST'])
+def stability():
+    """
+    Test Wigner robustness under edge noise.
+    Accepts same file-upload OR JSON LFR mode as /api/benchmark.
+    """
+    try:
+        gt_labels = gt_nodes = None
+
+        if request.is_json:
+            body = request.get_json()
+            n        = min(int(body.get('n', 200)), 1000)
+            mu       = float(body.get('mu', 0.1))
+            k        = int(body.get('k', 4))
+            avg_deg  = int(body.get('avg_degree', 10))
+            lfr      = generate_lfr_benchmark(n=n, mu=mu, k_communities=k, average_degree=avg_deg)
+            edges    = lfr['edges']
+            gt_labels = lfr['ground_truth_labels']
+            gt_nodes  = lfr['ground_truth_nodes']
+        else:
+            files = request.files.getlist('file')
+            if not files or all(f.filename == '' for f in files):
+                return jsonify({'error': 'No files uploaded.'}), 400
+
+            saved: Dict[str, str] = {}
+            for f in files:
+                if f.filename and allowed_file(f.filename):
+                    fname = secure_filename(f.filename)
+                    fpath = os.path.join(UPLOAD_FOLDER, fname)
+                    f.save(fpath)
+                    saved[ext(fname)] = fpath
+
+            try:
+                if 'edges' in saved:
+                    edges = parse_nodes_edges_files(saved['edges'], saved.get('nodes'))
+                elif 'mtx' in saved:
+                    try:
+                        edges = parse_mtx_file(saved['mtx'])['edges']
+                    except Exception:
+                        edges = parse_csv_edges(saved['mtx'])
+                else:
+                    key   = next(iter(saved))
+                    edges = parse_csv_edges(saved[key])
+
+                k = int(request.form.get('k', 0))
+                result = stability_test(edges, k=k, ground_truth_labels=gt_labels, ground_truth_nodes=gt_nodes)
+                return jsonify(result)
+            finally:
+                for fpath in saved.values():
+                    if os.path.exists(fpath):
+                        os.remove(fpath)
+
+        result = stability_test(edges, k=k, ground_truth_labels=gt_labels, ground_truth_nodes=gt_nodes)
+        return jsonify(result)
 
     except Exception as e:
         traceback.print_exc()

@@ -3,6 +3,7 @@ import FileUpload from './components/FileUpload';
 import ResultBanner from './components/ResultBanner';
 import EigenvalueChart from './components/EigenvalueChart';
 import NetworkGraph from './components/NetworkGraph';
+import BenchmarkPanel from './components/BenchmarkPanel';
 
 interface GraphNode  { id: string; label: number; }
 interface GraphEdge  { source: string; target: string; }
@@ -21,7 +22,10 @@ interface DetectionResult {
   visualization_note?: string | null;
 }
 
+type Tab = 'detect' | 'benchmark';
+
 export default function App() {
+  const [tab,     setTab]     = useState<Tab>('detect');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
   const [result,  setResult]  = useState<DetectionResult | null>(null);
@@ -67,34 +71,58 @@ export default function App() {
           </p>
         </header>
 
-        {/* ── Upload ─────────────────────────────────────────── */}
-        <FileUpload onAnalyze={handleAnalyze} loading={loading} error={error} />
+        {/* ── Tab nav ─────────────────────────────────────────── */}
+        <nav className="tab-nav">
+          <button
+            id="tab-detect"
+            className={`tab-btn ${tab === 'detect' ? 'tab-btn--active' : ''}`}
+            onClick={() => setTab('detect')}
+          >
+            <span className="tab-icon">⬡</span> Phát Hiện Cộng Đồng
+          </button>
+          <button
+            id="tab-benchmark"
+            className={`tab-btn ${tab === 'benchmark' ? 'tab-btn--active' : ''}`}
+            onClick={() => setTab('benchmark')}
+          >
+            <span className="tab-icon">⚖</span> So Sánh & Kiểm Chứng
+            <span className="tab-new-badge">MỚI</span>
+          </button>
+        </nav>
 
-        {/* ── Results ────────────────────────────────────────── */}
-        {result && (
-          <div className="results-wrapper">
-            <ResultBanner
-              hasCommunity={result.has_community}
-              lambdaMax={result.lambda_max}
-              graphStats={result.graph_stats}
-              timings={result.timings}
-              visualizationNote={result.visualization_note}
-            />
+        {/* ── Detect tab ──────────────────────────────────────── */}
+        {tab === 'detect' && (
+          <>
+            <FileUpload onAnalyze={handleAnalyze} loading={loading} error={error} />
 
-            <div className="viz-grid">
-              <EigenvalueChart
-                eigenvalues={result.eigenvalues}
-                lambdaMax={result.lambda_max}
-                hasCommunity={result.has_community}
-              />
-              <NetworkGraph
-                nodes={result.nodes}
-                edges={result.edges}
-                hasCommunity={result.has_community}
-              />
-            </div>
-          </div>
+            {result && (
+              <div className="results-wrapper">
+                <ResultBanner
+                  hasCommunity={result.has_community}
+                  lambdaMax={result.lambda_max}
+                  graphStats={result.graph_stats}
+                  timings={result.timings}
+                  visualizationNote={result.visualization_note}
+                />
+                <div className="viz-grid">
+                  <EigenvalueChart
+                    eigenvalues={result.eigenvalues}
+                    lambdaMax={result.lambda_max}
+                    hasCommunity={result.has_community}
+                  />
+                  <NetworkGraph
+                    nodes={result.nodes}
+                    edges={result.edges}
+                    hasCommunity={result.has_community}
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
+
+        {/* ── Benchmark tab ───────────────────────────────────── */}
+        {tab === 'benchmark' && <BenchmarkPanel />}
 
         {/* ── Footer ─────────────────────────────────────────── */}
         <footer className="app-footer">
