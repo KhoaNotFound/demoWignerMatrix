@@ -17,10 +17,10 @@ export default defineConfig(({ mode }) => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Allow ngrok/localtunnel hosts
       allowedHosts: true,
-      // Proxy API requests to Flask backend
+      // Proxy API requests to FastAPI backend
       proxy: {
         '/api': {
-          target: 'http://localhost:5000',
+          target: 'http://localhost:8000',
           changeOrigin: true,
         },
       },

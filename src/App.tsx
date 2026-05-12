@@ -3,8 +3,6 @@ import FileUpload from './components/FileUpload';
 import ResultBanner from './components/ResultBanner';
 import EigenvalueChart from './components/EigenvalueChart';
 import NetworkGraph from './components/NetworkGraph';
-import BenchmarkPanel from './components/BenchmarkPanel';
-
 interface GraphNode  { id: string; label: number; }
 interface GraphEdge  { source: string; target: string; }
 interface GraphStats { num_nodes: number; num_edges: number; density: number; avg_degree: number; }
@@ -22,15 +20,12 @@ interface DetectionResult {
   visualization_note?: string | null;
 }
 
-type Tab = 'detect' | 'benchmark';
-
 export default function App() {
-  const [tab,     setTab]     = useState<Tab>('detect');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
   const [result,  setResult]  = useState<DetectionResult | null>(null);
 
-  const handleAnalyze = async (files: File[], kClusters: number) => {
+  const handleAnalyze = async (files: File[]) => {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -38,7 +33,6 @@ export default function App() {
     try {
       const form = new FormData();
       files.forEach(f => form.append('file', f));
-      form.append('k', kClusters.toString());
 
       const res  = await fetch('/api/detect', { method: 'POST', body: form });
       const data = await res.json();
@@ -71,28 +65,8 @@ export default function App() {
           </p>
         </header>
 
-        {/* ── Tab nav ─────────────────────────────────────────── */}
-        <nav className="tab-nav">
-          <button
-            id="tab-detect"
-            className={`tab-btn ${tab === 'detect' ? 'tab-btn--active' : ''}`}
-            onClick={() => setTab('detect')}
-          >
-            <span className="tab-icon">⬡</span> Phát Hiện Cộng Đồng
-          </button>
-          <button
-            id="tab-benchmark"
-            className={`tab-btn ${tab === 'benchmark' ? 'tab-btn--active' : ''}`}
-            onClick={() => setTab('benchmark')}
-          >
-            <span className="tab-icon">⚖</span> So Sánh & Kiểm Chứng
-            <span className="tab-new-badge">MỚI</span>
-          </button>
-        </nav>
-
-        {/* ── Detect tab ──────────────────────────────────────── */}
-        {tab === 'detect' && (
-          <>
+        {/* ── Main Content ──────────────────────────────────────── */}
+        <>
             <FileUpload onAnalyze={handleAnalyze} loading={loading} error={error} />
 
             {result && (
@@ -119,10 +93,6 @@ export default function App() {
               </div>
             )}
           </>
-        )}
-
-        {/* ── Benchmark tab ───────────────────────────────────── */}
-        {tab === 'benchmark' && <BenchmarkPanel />}
 
         {/* ── Footer ─────────────────────────────────────────── */}
         <footer className="app-footer">

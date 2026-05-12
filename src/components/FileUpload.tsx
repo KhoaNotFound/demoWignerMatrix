@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { Upload, FileText, Loader2, X } from 'lucide-react';
 
 interface Props {
-  onAnalyze: (files: File[], kClusters: number) => void;
+  onAnalyze: (files: File[]) => void;
   loading: boolean;
   error: string | null;
 }
@@ -26,7 +26,6 @@ function fileIcon(name: string) {
 
 export default function FileUpload({ onAnalyze, loading, error }: Props) {
   const [files,     setFiles]     = useState<File[]>([]);
-  const [kClusters, setKClusters] = useState<number>(0);
   const [drag,      setDrag]      = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -102,28 +101,10 @@ export default function FileUpload({ onAnalyze, loading, error }: Props) {
         )}
       </div>
 
-      {/* K selector */}
-      <div className="k-selector-row">
-        <label htmlFor="kClusters" className="k-selector-label">Communities (K):</label>
-        <select
-          id="kClusters"
-          className="k-selector"
-          value={kClusters}
-          onChange={e => setKClusters(parseInt(e.target.value))}
-        >
-          <option value={0}>Auto-detect (BBP Theory)</option>
-          <option value={2}>2 Communities</option>
-          <option value={3}>3 Communities</option>
-          <option value={4}>4 Communities</option>
-          <option value={5}>5 Communities</option>
-          <option value={8}>8 Communities</option>
-        </select>
-      </div>
-
       {/* Analyze button */}
       <button
         className="analyze-button"
-        onClick={() => files.length && onAnalyze(files, kClusters)}
+        onClick={() => files.length && onAnalyze(files)}
         disabled={files.length === 0 || loading}
       >
         {loading ? (

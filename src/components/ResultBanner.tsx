@@ -98,13 +98,7 @@ export default function ResultBanner({
             <span className="stat-card-label">Total Time</span>
           </div>
         </div>
-        <div className="stat-card">
-          <Cpu size={20} className="stat-card-icon" />
-          <div className="stat-card-content">
-            <span className="stat-card-value stat-card-value--small">{timings.backend || 'CPU'}</span>
-            <span className="stat-card-label">Backend</span>
-          </div>
-        </div>
+
       </div>
 
       {visualizationNote && (
